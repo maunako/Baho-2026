@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0f172a">
+  <title>Porte à porte • Baho 2026</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const SECTIONS = [
+      { id: 'info', label: 'Infos', icon: '📋' },
+      { id: 'rues', label: 'Rues', icon: '🏠' },
+      { id: 'strategie', label: 'Stratégie', icon: '📅' },
+      { id: 'visites', label: 'Visites', icon: '👥' },
+      { id: 'synthese', label: 'Synthèse', icon: '📊' },
+    ];
+
+    const QUARTIERS = [
+      { id: 'est-residentiel', label: 'Est - Résidentiel', zone: 'Est/Centre', portes: 479 },
+      { id: 'centre-village', label: 'Centre Village', zone: 'Est/Centre', portes: 217 },
+      { id: 'mas-ambre', label: 'Mas Ambre', zone: 'Est/Centre', portes: 12 },
+      { id: 'ouest-avenues', label: 'Ouest - Avenues', zone: 'Ouest/Sud', portes: 304 },
+      { id: 'sud-lotissements', label: 'Sud - Lotissements', zone: 'Ouest/Sud', portes: 133 },
+      { id: 'sud-camps', label: 'Sud - Camps', zone: 'Ouest/Sud', portes: 120 },
+      { id: 'sud-quartiers', label: 'Sud - Quartiers', zone: 'Ouest/Sud', portes: 105 },
+      { id: 'sainte-lucie', label: 'Sainte-Lucie', zone: 'Ouest/Sud', portes: 104 },
+      { id: 'sud-chemins', label: 'Sud - Chemins', zone: 'Ouest/Sud', portes: 88 },
+    ];
+
+    const THEMES = {
+      light: {
+        bg: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
+        headerBg: 'rgba(255, 255, 255, 0.95)',
+        headerBorder: 'rgba(148, 163, 184, 0.2)',
+        cardBg: 'rgba(255, 255, 255, 0.9)',
+        cardBorder: 'rgba(148, 163, 184, 0.15)',
+        inputBg: '#f8fafc',
+        inputBorder: 'rgba(148, 163, 184, 0.3)',
+        textPrimary: '#1e293b',
+        textSecondary: '#64748b',
+        textMuted: '#94a3b8',
+        accent: '#3b82f6',
+        accentLight: 'rgba(59, 130, 246, 0.1)',
+        accentBorder: 'rgba(59, 130, 246, 0.25)',
+        success: '#16a34a',
+        danger: '#dc2626',
+        dangerBg: 'rgba(220, 38, 38, 0.1)',
+        checkboxBg: '#f1f5f9',
+        checkboxBorder: 'rgba(148, 163, 184, 0.25)',
+        modalBg: '#ffffff',
+      },
+      dark: {
+        bg: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+        headerBg: 'rgba(15, 23, 42, 0.95)',
+        headerBorder: 'rgba(148, 163, 184, 0.1)',
+        cardBg: 'rgba(30, 41, 59, 0.8)',
+        cardBorder: 'rgba(148, 163, 184, 0.1)',
+        inputBg: 'rgba(15, 23, 42, 0.6)',
+        inputBorder: 'rgba(148, 163, 184, 0.2)',
+        textPrimary: '#e2e8f0',
+        textSecondary: '#94a3b8',
+        textMuted: '#64748b',
+        accent: '#3b82f6',
+        accentLight: 'rgba(59, 130, 246, 0.15)',
+        accentBorder: 'rgba(59, 130, 246, 0.3)',
+        success: '#22c55e',
+        danger: '#ef4444',
+        dangerBg: 'rgba(239, 68, 68, 0.15)',
+        checkboxBg: 'rgba(15, 23, 42, 0.4)',
+        checkboxBorder: 'rgba(148, 163, 184, 0.15)',
+        modalBg: '#1e293b',
+      }
+    };
+
+    function App() {
+      const [currentSection, setCurrentSection] = useState('info');
+      const [currentQuartier, setCurrentQuartier] = useState('est-residentiel');
+      const [data, setData] = useState({});
+      const [loading, setLoading] = useState(true);
+      const [saving, setSaving] = useState(false);
+      const [showQuartierPicker, setShowQuartierPicker] = useState(false);
+      const [showSettings, setShowSettings] = useState(false);
+      const [showExport, setShowExport] = useState(false);
+      const [themeMode, setThemeMode] = useState('auto');
+      const [systemDark, setSystemDark] = useState(window.matchMedia('(prefers-color-scheme: dark)').matches);
+      const fileInputRef = useRef(null);
+
+      useEffect(() => {
+        const mq = window.matchMedia('(prefers-color-scheme: dark)');
+        const handler = e => setSystemDark(e.matches);
+        mq.addEventListener('change', handler);
+        return () => mq.removeEventListener('change', handler);
+      }, []);
+
+      useEffect(() => {
+        try {
+          const saved = localStorage.getItem('app-theme');
+          if (saved) setThemeMode(saved);
+        } catch(e) {}
+      }, []);
+
+      const changeTheme = (mode) => {
+        setThemeMode(mode);
+        try { localStorage.setItem('app-theme', mode); } catch(e) {}
+      };
+
+      const isDark = themeMode === 'auto' ? systemDark : themeMode === 'dark';
+      const theme = isDark ? THEMES.dark : THEMES.light;
+
+      useEffect(() => { loadData(); }, [currentQuartier]);
+
+      const loadData = () => {
+        setLoading(true);
+        try {
+          const saved = localStorage.getItem(`q-${currentQuartier}`);
+          setData(saved ? JSON.parse(saved) : getDefaultData());
+        } catch(e) { setData(getDefaultData()); }
+        setLoading(false);
+      };
+
+      const saveData = (newData) => {
+        setSaving(true);
+        try { localStorage.setItem(`q-${currentQuartier}`, JSON.stringify(newData)); } catch(e) {}
+        setTimeout(() => setSaving(false), 300);
+      };
+
+      const updateField = (field, value) => {
+        const newData = { ...data, [field]: value };
+        setData(newData);
+        saveData(newData);
+      };
+
+      const getDefaultData = () => ({
+        responsable: '', binomesAssignes: '', parking: '', pointRdv: '', difficultes: '',
+        objectifPortes: '', dateLimite: '', rues: [], googleMapsUrl: '',
+        joursOptimaux: [], creneaux: [], approche: '',
+        visites: [], portesTotal: '', discussionsReelles: '', absents: '', refus: '',
+        etoiles: 3, ruesCouvertes: '', ruesPartielles: '', ruesNonCouvertes: '',
+        pointsPositifs: '', pointsAmeliorer: '', reunionPublique: '', secondPassage: '', notes: '',
+      });
+
+      const getQuartierLabel = () => QUARTIERS.find(q => q.id === currentQuartier)?.label || currentQuartier;
+      const getQuartierInfo = () => QUARTIERS.find(q => q.id === currentQuartier);
+
+      const exportJSON = () => {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `fiche-${currentQuartier}.json`;
+        a.click();
+      };
+
+      const exportAllJSON = () => {
+        const allData = {};
+        QUARTIERS.forEach(q => {
+          try {
+            const d = localStorage.getItem(`q-${q.id}`);
+            if (d) allData[q.id] = JSON.parse(d);
+          } catch(e) {}
+        });
+        const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `baho2026-complet-${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+      };
+
+      const importJSON = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const imported = JSON.parse(e.target.result);
+            // Vérifier si c'est une sauvegarde complète
+            if (imported && typeof imported === 'object' && !imported.responsable) {
+              let count = 0;
+              Object.entries(imported).forEach(([qId, qData]) => {
+                if (QUARTIERS.find(q => q.id === qId)) {
+                  localStorage.setItem(`q-${qId}`, JSON.stringify(qData));
+                  count++;
+                }
+              });
+              loadData();
+              setShowExport(false);
+              alert(`✅ ${count} fiches importées !`);
+            } else {
+              const merged = { ...getDefaultData(), ...imported };
+              setData(merged);
+              saveData(merged);
+              setShowExport(false);
+              alert(`✅ Fiche importée pour ${getQuartierLabel()}`);
+            }
+          } catch(err) {
+            alert('❌ Fichier invalide');
+          }
+        };
+        reader.readAsText(file);
+        event.target.value = '';
+      };
+
+      const shareData = async () => {
+        const text = `📍 ${getQuartierLabel()}\n${(data.rues || []).length} rues\n${'⭐'.repeat(data.etoiles || 0)}`;
+        if (navigator.share) {
+          try { await navigator.share({ title: `Fiche ${getQuartierLabel()}`, text }); } catch(e) {}
+        } else {
+          navigator.clipboard?.writeText(text);
+          alert('Copié !');
+        }
+      };
+
+      const renderSection = () => {
+        if (loading) return <div style={{padding:60,textAlign:'center',color:theme.textMuted}}>Chargement...</div>;
+        const props = { data, updateField, theme };
+        switch (currentSection) {
+          case 'info': return <SectionInfo {...props} quartierInfo={getQuartierInfo()} />;
+          case 'rues': return <SectionRues {...props} />;
+          case 'strategie': return <SectionStrategie {...props} />;
+          case 'visites': return <SectionVisites {...props} />;
+          case 'synthese': return <SectionSynthese {...props} />;
+          default: return null;
+        }
+      };
+
+      const styles = {
+        app: { fontFamily:"'DM Sans',sans-serif", background:theme.bg, minHeight:'100vh', color:theme.textPrimary },
+        header: { background:theme.headerBg, backdropFilter:'blur(20px)', borderBottom:`1px solid ${theme.headerBorder}`, padding:'12px 16px', position:'sticky', top:0, zIndex:100 },
+        headerTop: { display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 },
+        logo: { display:'flex', alignItems:'center', gap:10 },
+        logoIcon: { width:36, height:36, background:'linear-gradient(135deg,#3b82f6,#8b5cf6)', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 },
+        logoText: { fontWeight:700, fontSize:15, background:'linear-gradient(135deg,#60a5fa,#a78bfa)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' },
+        headerActions: { display:'flex', gap:8 },
+        iconBtn: { width:40, height:40, display:'flex', alignItems:'center', justifyContent:'center', background:theme.checkboxBg, border:`1px solid ${theme.checkboxBorder}`, borderRadius:10, fontSize:18, cursor:'pointer' },
+        quartierBtn: { display:'flex', alignItems:'center', gap:6, background:theme.accentLight, border:`1px solid ${theme.accentBorder}`, color:theme.accent, padding:'8px 12px', borderRadius:10, fontWeight:600, fontSize:12, cursor:'pointer', maxWidth:160, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' },
+        nav: { display:'flex', gap:4, overflowX:'auto', WebkitOverflowScrolling:'touch' },
+        navTab: (active) => ({ display:'flex', flexDirection:'column', alignItems:'center', gap:2, padding:'8px 12px', borderRadius:10, background:active?theme.accentLight:'transparent', border:'none', color:active?theme.accent:theme.textMuted, fontSize:10, fontWeight:500, cursor:'pointer', whiteSpace:'nowrap' }),
+        save: { fontSize:11, color:saving?'#f59e0b':theme.success, marginTop:4 },
+        content: { padding:16, paddingBottom:32 },
+        modal: { position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'flex-end', justifyContent:'center', zIndex:200 },
+        modalBox: { background:theme.modalBg, borderRadius:'20px 20px 0 0', width:'100%', maxWidth:400, maxHeight:'80vh', overflowY:'auto' },
+        modalHeader: { padding:20, borderBottom:`1px solid ${theme.cardBorder}`, display:'flex', justifyContent:'space-between', alignItems:'center' },
+        modalTitle: { fontWeight:700, fontSize:18 },
+        modalClose: { width:32, height:32, borderRadius:'50%', background:theme.checkboxBg, border:'none', color:theme.textSecondary, fontSize:18, cursor:'pointer' },
+        card: { background:theme.cardBg, border:`1px solid ${theme.cardBorder}`, borderRadius:16, padding:16, marginBottom:12 },
+        cardTitle: { fontSize:14, fontWeight:600, color:theme.textSecondary, marginBottom:12, textTransform:'uppercase', letterSpacing:0.5 },
+        label: { display:'block', fontSize:12, fontWeight:500, color:theme.textSecondary, marginBottom:6 },
+        input: { width:'100%', background:theme.inputBg, border:`1px solid ${theme.inputBorder}`, borderRadius:10, padding:'12px 14px', color:theme.textPrimary, fontSize:15, outline:'none' },
+        textarea: { width:'100%', background:theme.inputBg, border:`1px solid ${theme.inputBorder}`, borderRadius:10, padding:'12px 14px', color:theme.textPrimary, fontSize:15, minHeight:80, resize:'vertical', outline:'none' },
+        btn: { display:'inline-flex', alignItems:'center', justifyContent:'center', gap:8, padding:'12px 20px', borderRadius:10, fontWeight:600, fontSize:14, cursor:'pointer', border:'none' },
+        btnPrimary: { background:'linear-gradient(135deg,#3b82f6,#8b5cf6)', color:'white' },
+        btnSecondary: { background:theme.checkboxBg, border:`1px solid ${theme.checkboxBorder}`, color:theme.textSecondary },
+        btnDanger: { background:theme.dangerBg, color:theme.danger, padding:'8px 14px', fontSize:12 },
+        row: { display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 },
+        checkItem: (checked) => ({ display:'flex', alignItems:'center', gap:8, background:checked?theme.accentLight:theme.checkboxBg, border:`1px solid ${checked?theme.accentBorder:theme.checkboxBorder}`, padding:'10px 14px', borderRadius:10, cursor:'pointer', fontSize:13, color:checked?theme.accent:theme.textPrimary }),
+      };
+
+      return (
+        <div style={styles.app}>
+          <header style={styles.header}>
+            <div style={styles.headerTop}>
+              <div style={styles.logo}>
+                <div style={styles.logoIcon}>🚪</div>
+                <span style={styles.logoText}>Porte à porte • Baho 2026</span>
+              </div>
+              <div style={styles.headerActions}>
+                <button style={styles.iconBtn} onClick={() => setShowExport(true)}>💾</button>
+                <button style={styles.iconBtn} onClick={() => setShowSettings(true)}>{themeMode==='light'?'☀️':themeMode==='dark'?'🌙':'🌓'}</button>
+                <button style={styles.quartierBtn} onClick={() => setShowQuartierPicker(true)}>{getQuartierLabel()} ▼</button>
+              </div>
+            </div>
+            <nav style={styles.nav}>
+              {SECTIONS.map(s => (
+                <button key={s.id} style={styles.navTab(currentSection===s.id)} onClick={() => setCurrentSection(s.id)}>
+                  <span style={{fontSize:18}}>{s.icon}</span>{s.label}
+                </button>
+              ))}
+            </nav>
+            <div style={styles.save}>{saving ? '⏳ Sauvegarde...' : '✓ Sauvegardé'}</div>
+          </header>
+
+          <main style={styles.content}>{renderSection()}</main>
+
+          {showQuartierPicker && (
+            <div style={styles.modal} onClick={() => setShowQuartierPicker(false)}>
+              <div style={styles.modalBox} onClick={e => e.stopPropagation()}>
+                <div style={styles.modalHeader}>
+                  <h3 style={styles.modalTitle}>Choisir un quartier</h3>
+                  <button style={styles.modalClose} onClick={() => setShowQuartierPicker(false)}>×</button>
+                </div>
+                <div style={{padding:12}}>
+                  <div style={{padding:'8px 12px',fontSize:12,fontWeight:600,color:theme.accent,textTransform:'uppercase'}}>🔵 Zone Est / Centre</div>
+                  {QUARTIERS.filter(q => q.zone === 'Est/Centre').map(q => (
+                    <div key={q.id} onClick={() => {setCurrentQuartier(q.id);setShowQuartierPicker(false);}} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:16,borderRadius:12,cursor:'pointer',marginBottom:4,background:currentQuartier===q.id?theme.accentLight:'transparent',border:currentQuartier===q.id?`1px solid ${theme.accentBorder}`:'1px solid transparent'}}>
+                      <div><span style={{fontWeight:600}}>{q.label}</span><span style={{fontSize:11,color:theme.textMuted,marginLeft:8}}>({q.portes})</span></div>
+                      {currentQuartier===q.id && <span>✓</span>}
+                    </div>
+                  ))}
+                  <div style={{padding:'16px 12px 8px',fontSize:12,fontWeight:600,color:'#f59e0b',textTransform:'uppercase'}}>🟠 Zone Ouest / Sud</div>
+                  {QUARTIERS.filter(q => q.zone === 'Ouest/Sud').map(q => (
+                    <div key={q.id} onClick={() => {setCurrentQuartier(q.id);setShowQuartierPicker(false);}} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:16,borderRadius:12,cursor:'pointer',marginBottom:4,background:currentQuartier===q.id?theme.accentLight:'transparent',border:currentQuartier===q.id?`1px solid ${theme.accentBorder}`:'1px solid transparent'}}>
+                      <div><span style={{fontWeight:600}}>{q.label}</span><span style={{fontSize:11,color:theme.textMuted,marginLeft:8}}>({q.portes})</span></div>
+                      {currentQuartier===q.id && <span>✓</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showSettings && (
+            <div style={styles.modal} onClick={() => setShowSettings(false)}>
+              <div style={styles.modalBox} onClick={e => e.stopPropagation()}>
+                <div style={styles.modalHeader}>
+                  <h3 style={styles.modalTitle}>Apparence</h3>
+                  <button style={styles.modalClose} onClick={() => setShowSettings(false)}>×</button>
+                </div>
+                <div style={{padding:16,display:'flex',gap:8}}>
+                  {[{m:'light',i:'☀️',l:'Clair'},{m:'dark',i:'🌙',l:'Sombre'},{m:'auto',i:'🌓',l:'Auto'}].map(t => (
+                    <div key={t.m} onClick={() => changeTheme(t.m)} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:8,padding:16,borderRadius:12,background:theme.checkboxBg,border:themeMode===t.m?`2px solid ${theme.accent}`:'2px solid transparent',cursor:'pointer'}}>
+                      <span style={{fontSize:28}}>{t.i}</span>
+                      <span style={{fontSize:12,fontWeight:600}}>{t.l}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showExport && (
+            <div style={styles.modal} onClick={() => setShowExport(false)}>
+              <div style={styles.modalBox} onClick={e => e.stopPropagation()}>
+                <div style={styles.modalHeader}>
+                  <h3 style={styles.modalTitle}>Sauvegardes</h3>
+                  <button style={styles.modalClose} onClick={() => setShowExport(false)}>×</button>
+                </div>
+                <div style={{padding:16}}>
+                  <p style={{fontSize:13,color:theme.textSecondary,marginBottom:16,textAlign:'center'}}>
+                    Quartier: <strong>{getQuartierLabel()}</strong>
+                  </p>
+                  
+                  <button style={{...styles.btn,...styles.btnPrimary,width:'100%',marginBottom:10}} onClick={() => {exportJSON();setShowExport(false);}}>
+                    💾 Exporter ce quartier
+                  </button>
+                  <button style={{...styles.btn,...styles.btnSecondary,width:'100%',marginBottom:10}} onClick={() => {shareData();setShowExport(false);}}>
+                    📤 Partager
+                  </button>
+
+                  <div style={{borderTop:`1px solid ${theme.cardBorder}`,margin:'16px 0',paddingTop:16}}>
+                    <p style={{fontSize:12,color:theme.textMuted,marginBottom:12,textAlign:'center'}}>📦 Toutes les fiches</p>
+                    <button style={{...styles.btn,...styles.btnSecondary,width:'100%',marginBottom:10,background:'linear-gradient(135deg,#8b5cf6,#6366f1)',color:'white',border:'none'}} onClick={() => {exportAllJSON();setShowExport(false);}}>
+                      📥 Exporter TOUT
+                    </button>
+                  </div>
+
+                  <div style={{borderTop:`1px solid ${theme.cardBorder}`,margin:'16px 0',paddingTop:16}}>
+                    <p style={{fontSize:12,color:theme.textMuted,marginBottom:12,textAlign:'center'}}>📂 Importer</p>
+                    <input type="file" ref={fileInputRef} accept=".json" onChange={importJSON} style={{display:'none'}} />
+                    <button style={{...styles.btn,width:'100%',background:'linear-gradient(135deg,#f59e0b,#d97706)',color:'white'}} onClick={() => fileInputRef.current?.click()}>
+                      📥 Importer un fichier
+                    </button>
+                    <p style={{fontSize:11,color:theme.textMuted,marginTop:12,textAlign:'center'}}>
+                      Fonctionne avec une fiche ou toutes les fiches
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function SectionInfo({ data, updateField, theme, quartierInfo }) {
+      const s = {
+        card: { background:theme.cardBg, border:`1px solid ${theme.cardBorder}`, borderRadius:16, padding:16, marginBottom:12 },
+        cardTitle: { fontSize:14, fontWeight:600, color:theme.textSecondary, marginBottom:12, textTransform:'uppercase', letterSpacing:0.5 },
+        label: { display:'block', fontSize:12, fontWeight:500, color:theme.textSecondary, marginBottom:6 },
+        input: { width:'100%', background:theme.inputBg, border:`1px solid ${theme.inputBorder}`, borderRadius:10, padding:'12px 14px', color:theme.textPrimary, fontSize:15, outline:'none', fontFamily:'inherit' },
+        textarea: { width:'100%', background:theme.inputBg, border:`1px solid ${theme.inputBorder}`, borderRadius:10, padding:'12px 14px', color:theme.textPrimary, fontSize:15, minHeight:60, resize:'vertical', outline:'none', fontFamily:'inherit' },
+      };
+      return (
+        <div>
+          <h2 style={{fontSize:20,fontWeight:700,marginBottom:16}}>📋 Infos Quartier</h2>
+          <div style={{...s.card,background:'linear-gradient(135deg, rgba(59,130,246,0.15), rgba(139,92,246,0.15))',border:'none'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+              <div>
+                <div style={{fontSize:11,color:theme.textMuted,textTransform:'uppercase'}}>Zone {quartierInfo?.zone}</div>
+                <div style={{fontSize:18,fontWeight:700,marginTop:4}}>{quartierInfo?.label}</div>
+              </div>
+              <div style={{textAlign:'right'}}>
+                <div style={{fontSize:28,fontWeight:700,color:theme.accent}}>{quartierInfo?.portes}</div>
+                <div style={{fontSize:11,color:theme.textMuted}}>portes</div>
+              </div>
+            </div>
+          </div>
+          <div style={s.card}>
+            <h3 style={s.cardTitle}>👥 Équipe</h3>
+            <div style={{marginBottom:14}}>
+              <label style={s.label}>Responsable</label>
+              <input style={s.input} placeholder="Nom" value={data.responsable||''} onChange={e=>updateField('responsable',e.target.value)} />
+            </div>
+            <div>
+              <label style={s.label}>Binômes</label>
+              <input style={s.input} placeholder="Marie+Paul, Luc+Anne" value={data.binomesAssignes||''} onChange={e=>updateField('binomesAssignes',e.target.value)} />
+            </div>
+          </div>
+          <div style={s.card}>
+            <h3 style={s.cardTitle}>📍 Accès</h3>
+            <div style={{marginBottom:14}}>
+              <label style={s.label}>Parking</label>
+              <input style={s.input} placeholder="Où se garer" value={data.parking||''} onChange={e=>updateField('parking',e.target.value)} />
+            </div>
+            <div style={{marginBottom:14}}>
+              <label style={s.label}>Point RDV</label>
+              <input style={s.input} placeholder="Lieu de rencontre" value={data.pointRdv||''} onChange={e=>updateField('pointRdv',e.target.value)} />
+            </div>
+            <div>
+              <label style={s.label}>Difficultés</label>
+              <textarea style={s.textarea} placeholder="Digicodes, chiens..." value={data.difficultes||''} onChange={e=>updateField('difficultes',e.target.value)} />
+            </div>
+          </div>
+          <div style={s.card}>
+            <h3 style={s.cardTitle}>🎯 Objectif</h3>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+              <div>
+                <label style={s.label}>Portes</label>
+                <input style={s.input} type="number" placeholder={quartierInfo?.portes} value={data.objectifPortes||''} onChange={e=>updateField('objectifPortes',e.target.value)} />
+              </div>
+              <div>
+                <label style={s.label}>Date limite</label>
+                <input style={s.input} type="date" value={data.dateLimite||''} onChange={e=>updateField('dateLimite',e.target.value)} />
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function SectionRues({ data, updateField, theme }) {
+      const s = {
+        card: { background:theme.cardBg, border:`1px solid ${theme.cardBorder}`, borderRadius:16, padding:16, marginBottom:12 },
+        cardTitle: { fontSize:14, fontWeight:600, color:theme.textSecondary, marginBottom:12, textTransform:'uppercase', letterSpacing:0.5 },
+        label: { display:'block', fontSize:12, fontWeight:500, color:theme.textSecondary, marginBottom:6 },
+        input: { width:'100%', background:theme.inputBg, border:`1px solid ${theme.inputBorder}`, borderRadius:10, padding:'12px 14px', color:theme.textPrimary, fontSize:15, outline:'none', fontFamily:'inherit' },
+        btn: { display:'inline-flex', alignItems:'center', justifyContent:'center', gap:8, padding:'12px 20px', borderRadius:10, fontWeight:600, fontSize:14, cursor:'pointer', border:'none' },
+      };
+      const addRue = () => updateField('rues', [...(data.rues||[]), {nom:'',portes:'',remarques:''}]);
+      const updateRue = (i,f,v) => { const r=[...(data.rues||[])]; r[i]={...r[i],[f]:v}; updateField('rues',r); };
+      const removeRue = i => updateField('rues', (data.rues||[]).filter((_,idx)=>idx!==i));
+      const total = (data.rues||[]).reduce((sum,r)=>sum+(parseInt(r.portes)||0),0);
+
+      return (
+        <div>
+          <h2 style={{fontSize:20,fontWeight:700,marginBottom:16}}>🏠 Rues</h2>
+          <div style={s.card}>
+            <h3 style={s.cardTitle}>📍 Carte</h3>
+            <div style={{marginBottom:14}}>
+              <label style={s.label}>Lien Google Maps</label>
+              <input style={s.input} placeholder="https://www.google.com/maps/d/..." value={data.googleMapsUrl||''} onChange={e=>updateField('googleMapsUrl',e.target.value)} />
+            </div>
+            {data.googleMapsUrl && (
+              <button style={{...s.btn,width:'100%',background:'linear-gradient(135deg,#22c55e,#16a34a)',color:'white'}} onClick={()=>window.open(data.googleMapsUrl,'_blank')}>
+                🗺️ Ouvrir la carte
+              </button>
+            )}
+          </div>
+          {(data.rues||[]).length===0 ? (
+            <div style={{textAlign:'center',padding:40,color:theme.textMuted}}>
+              <div style={{fontSize:48}}>🏘️</div>
+              <p>Aucune rue</p>
+            </div>
+          ) : (data.rues||[]).map((r,i) => (
+            <div key={i} style={{background:theme.checkboxBg,border:`1px solid ${theme.cardBorder}`,borderRadius:12,padding:14,marginBottom:10}}>
+              <div style={{display:'flex',justifyContent:'space-between',marginBottom:10}}>
+                <span style={{fontWeight:600,color:theme.accent}}>Rue {i+1}</span>
+                <button style={{...s.btn,padding:'6px 12px',fontSize:12,background:theme.dangerBg,color:theme.danger}} onClick={()=>removeRue(i)}>✕</button>
+              </div>
+              <div style={{marginBottom:10}}>
+                <input style={s.input} placeholder="Nom de la rue" value={r.nom||''} onChange={e=>updateRue(i,'nom',e.target.value)} />
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 2fr',gap:10}}>
+                <input style={s.input} type="number" placeholder="Portes" value={r.portes||''} onChange={e=>updateRue(i,'portes',e.target.value)} />
+                <input style={s.input} placeholder="Remarques" value={r.remarques||''} onChange={e=>updateRue(i,'remarques',e.target.value)} />
+              </div>
+            </div>
+          ))}
+          <button style={{...s.btn,width:'100%',background:'linear-gradient(135deg,#3b82f6,#8b5cf6)',color:'white'}} onClick={addRue}>+ Ajouter une rue</button>
+          {total>0 && (
+            <div style={{...s.card,marginTop:16,textAlign:'center'}}>
+              <div style={{fontSize:24,fontWeight:700,color:theme.accent}}>{total}</div>
+              <div style={{fontSize:11,color:theme.textMuted}}>portes total</div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function SectionStrategie({ data, updateField, theme }) {
+      const s = {
+        card: { background:theme.cardBg, border:`1px solid ${theme.cardBorder}`, borderRadius:16, padding:16, marginBottom:12 },
+        cardTitle: { fontSize:14, fontWeight:600, color:theme.textSecondary, marginBottom:12, textTransform:'uppercase', letterSpacing:0.5 },
+      };
+      const toggle = (f,v) => {
+        const c = data[f]||[];
+        updateField(f, c.includes(v) ? c.filter(x=>x!==v) : [...c,v]);
+      };
+      const Check = ({checked,onClick,children}) => (
+        <div onClick={onClick} style={{display:'flex',alignItems:'center',gap:8,background:checked?theme.accentLight:theme.checkboxBg,border:`1px solid ${checked?theme.accentBorder:theme.checkboxBorder}`,padding:'10px 14px',borderRadius:10,cursor:'pointer',fontSize:13,color:checked?theme.accent:theme.textPrimary}}>{children}</div>
+      );
+      return (
+        <div>
+          <h2 style={{fontSize:20,fontWeight:700,marginBottom:16}}>📅 Stratégie</h2>
+          <div style={s.card}>
+            <h3 style={s.cardTitle}>Jours</h3>
+            <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+              {['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(j=>(
+                <Check key={j} checked={(data.joursOptimaux||[]).includes(j)} onClick={()=>toggle('joursOptimaux',j)}>{j}</Check>
+              ))}
+            </div>
+          </div>
+          <div style={s.card}>
+            <h3 style={s.cardTitle}>Créneaux</h3>
+            <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+              {[{v:'matin',l:'☀️ Matin'},{v:'aprem',l:'🌤️ Après-midi'},{v:'soir',l:'🌙 Soir'}].map(c=>(
+                <Check key={c.v} checked={(data.creneaux||[]).includes(c.v)} onClick={()=>toggle('creneaux',c.v)}>{c.l}</Check>
+              ))}
+            </div>
+          </div>
+          <div style={s.card}>
+            <h3 style={s.cardTitle}>Approche</h3>
+            <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+              {[{v:'binome',l:'Binôme'},{v:'trinome',l:'Trinôme'},{v:'voiture',l:'Voiture'}].map(a=>(
+                <Check key={a.v} checked={data.approche===a.v} onClick={()=>updateField('approche',a.v)}>{a.l}</Check>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function SectionVisites({ data, updateField, theme }) {
+      const s = {
+        card: { background:theme.cardBg, border:`1px solid ${theme.cardBorder}`, borderRadius:16, padding:16, marginBottom:12 },
+        label: { display:'block', fontSize:12, fontWeight:500, color:theme.textSecondary, marginBottom:6 },
+        input: { width:'100%', background:theme.inputBg, border:`1px solid ${theme.inputBorder}`, borderRadius:10, padding:'12px 14px', color:theme.textPrimary, fontSize:15, outline:'none', fontFamily:'inherit' },
+        textarea: { width:'100%', background:theme.inputBg, border:`1px solid ${theme.inputBorder}`, borderRadius:10, padding:'12px 14px', color:theme.textPrimary, fontSize:15, minHeight:60, resize:'vertical', outline:'none', fontFamily:'inherit' },
+        btn: { display:'inline-flex', alignItems:'center', justifyContent:'center', gap:8, padding:'12px 20px', borderRadius:10, fontWeight:600, fontSize:14, cursor:'pointer', border:'none' },
+      };
+      const add = () => updateField('visites', [...(data.visites||[]), {date:new Date().toISOString().split('T')[0],heureDebut:'',heureFin:'',binomes:'',ruesCouvertes:'',portesFrappees:'',ambiance:'',pointsCles:''}]);
+      const upd = (i,f,v) => { const vs=[...(data.visites||[])]; vs[i]={...vs[i],[f]:v}; updateField('visites',vs); };
+      const rem = i => updateField('visites', (data.visites||[]).filter((_,idx)=>idx!==i));
+
+      return (
+        <div>
+          <h2 style={{fontSize:20,fontWeight:700,marginBottom:16}}>👥 Visites</h2>
+          {(data.visites||[]).length===0 ? (
+            <div style={{textAlign:'center',padding:40,color:theme.textMuted}}>
+              <div style={{fontSize:48}}>📝</div>
+              <p>Aucune visite</p>
+            </div>
+          ) : (data.visites||[]).map((v,i) => (
+            <div key={i} style={{background:theme.checkboxBg,border:`1px solid ${theme.cardBorder}`,borderRadius:12,padding:14,marginBottom:12}}>
+              <div style={{display:'flex',justifyContent:'space-between',marginBottom:12,paddingBottom:10,borderBottom:`1px solid ${theme.cardBorder}`}}>
+                <span style={{fontWeight:600,color:'#a78bfa'}}>Visite {i+1}</span>
+                <button style={{...s.btn,padding:'6px 12px',fontSize:12,background:theme.dangerBg,color:theme.danger}} onClick={()=>rem(i)}>✕</button>
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
+                <div>
+                  <label style={s.label}>Date</label>
+                  <input style={s.input} type="date" value={v.date||''} onChange={e=>upd(i,'date',e.target.value)} />
+                </div>
+                <div>
+                  <label style={s.label}>Horaire</label>
+                  <div style={{display:'flex',gap:4,alignItems:'center'}}>
+                    <input style={{...s.input,flex:1}} type="time" value={v.heureDebut||''} onChange={e=>upd(i,'heureDebut',e.target.value)} />
+                    <span>→</span>
+                    <input style={{...s.input,flex:1}} type="time" value={v.heureFin||''} onChange={e=>upd(i,'heureFin',e.target.value)} />
+                  </div>
+                </div>
+              </div>
+              <div style={{marginBottom:10}}>
+                <label style={s.label}>Binômes</label>
+                <input style={s.input} placeholder="Qui" value={v.binomes||''} onChange={e=>upd(i,'binomes',e.target.value)} />
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:10,marginBottom:10}}>
+                <div>
+                  <label style={s.label}>Rues</label>
+                  <input style={s.input} placeholder="Rues couvertes" value={v.ruesCouvertes||''} onChange={e=>upd(i,'ruesCouvertes',e.target.value)} />
+                </div>
+                <div>
+                  <label style={s.label}>Portes</label>
+                  <input style={s.input} type="number" placeholder="0" value={v.portesFrappees||''} onChange={e=>upd(i,'portesFrappees',e.target.value)} />
+                </div>
+              </div>
+              <div style={{marginBottom:10}}>
+                <label style={s.label}>Ambiance</label>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:6}}>
+                  {[{v:'top',i:'😀'},{v:'bien',i:'🙂'},{v:'neutre',i:'😐'},{v:'bof',i:'😕'},{v:'dur',i:'😟'}].map(a=>(
+                    <div key={a.v} onClick={()=>upd(i,'ambiance',a.v)} style={{display:'flex',flexDirection:'column',alignItems:'center',padding:8,borderRadius:10,background:v.ambiance===a.v?theme.accentLight:theme.checkboxBg,border:`1px solid ${v.ambiance===a.v?theme.accentBorder:theme.cardBorder}`,cursor:'pointer'}}>
+                      <span style={{fontSize:20}}>{a.i}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label style={s.label}>Points clés</label>
+                <textarea style={s.textarea} placeholder="Remarques, thèmes..." value={v.pointsCles||''} onChange={e=>upd(i,'pointsCles',e.target.value)} />
+              </div>
+            </div>
+          ))}
+          <button style={{...s.btn,width:'100%',background:'linear-gradient(135deg,#3b82f6,#8b5cf6)',color:'white'}} onClick={add}>+ Ajouter une visite</button>
+        </div>
+      );
+    }
+
+    function SectionSynthese({ data, updateField, theme }) {
+      const s = {
+        card: { background:theme.cardBg, border:`1px solid ${theme.cardBorder}`, borderRadius:16, padding:16, marginBottom:12 },
+        cardTitle: { fontSize:14, fontWeight:600, color:theme.textSecondary, marginBottom:12, textTransform:'uppercase', letterSpacing:0.5 },
+        label: { display:'block', fontSize:12, fontWeight:500, color:theme.textSecondary, marginBottom:6 },
+        input: { width:'100%', background:theme.inputBg, border:`1px solid ${theme.inputBorder}`, borderRadius:10, padding:'12px 14px', color:theme.textPrimary, fontSize:15, outline:'none', fontFamily:'inherit' },
+        textarea: { width:'100%', background:theme.inputBg, border:`1px solid ${theme.inputBorder}`, borderRadius:10, padding:'12px 14px', color:theme.textPrimary, fontSize:15, minHeight:60, resize:'vertical', outline:'none', fontFamily:'inherit' },
+      };
+      const Check = ({checked,onClick,children}) => (
+        <div onClick={onClick} style={{display:'flex',alignItems:'center',gap:8,background:checked?theme.accentLight:theme.checkboxBg,border:`1px solid ${checked?theme.accentBorder:theme.checkboxBorder}`,padding:'10px 14px',borderRadius:10,cursor:'pointer',fontSize:13,color:checked?theme.accent:theme.textPrimary}}>{children}</div>
+      );
+      return (
+        <div>
+          <h2 style={{fontSize:20,fontWeight:700,marginBottom:16}}>📊 Synthèse</h2>
+          <div style={s.card}>
+            <h3 style={s.cardTitle}>Stats</h3>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+              {[{f:'portesTotal',l:'Portes'},{f:'discussionsReelles',l:'Discussions'},{f:'absents',l:'Absents'},{f:'refus',l:'Refus'}].map(x=>(
+                <div key={x.f} style={{background:theme.checkboxBg,borderRadius:12,padding:14}}>
+                  <input style={{...s.input,fontSize:20,fontWeight:700,textAlign:'center',color:theme.accent}} type="number" placeholder="0" value={data[x.f]||''} onChange={e=>updateField(x.f,e.target.value)} />
+                  <div style={{fontSize:11,color:theme.textMuted,marginTop:4,textAlign:'center'}}>{x.l}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={s.card}>
+            <h3 style={s.cardTitle}>Note</h3>
+            <div style={{display:'flex',gap:6,justifyContent:'center'}}>
+              {[1,2,3,4,5].map(n=>(
+                <span key={n} onClick={()=>updateField('etoiles',n)} style={{fontSize:32,cursor:'pointer'}}>{n<=(data.etoiles||0)?'⭐':'☆'}</span>
+              ))}
+            </div>
+          </div>
+          <div style={s.card}>
+            <h3 style={s.cardTitle}>Couverture</h3>
+            {[{f:'ruesCouvertes',l:'✓ Couvertes'},{f:'ruesPartielles',l:'⚠️ Partielles'},{f:'ruesNonCouvertes',l:'✗ Non couvertes'}].map(x=>(
+              <div key={x.f} style={{marginBottom:14}}>
+                <label style={s.label}>{x.l}</label>
+                <textarea style={s.textarea} placeholder="Liste..." value={data[x.f]||''} onChange={e=>updateField(x.f,e.target.value)} />
+              </div>
+            ))}
+          </div>
+          <div style={s.card}>
+            <h3 style={s.cardTitle}>Bilan</h3>
+            <div style={{marginBottom:14}}>
+              <label style={s.label}>Points positifs</label>
+              <textarea style={s.textarea} value={data.pointsPositifs||''} onChange={e=>updateField('pointsPositifs',e.target.value)} />
+            </div>
+            <div>
+              <label style={s.label}>À améliorer</label>
+              <textarea style={s.textarea} value={data.pointsAmeliorer||''} onChange={e=>updateField('pointsAmeliorer',e.target.value)} />
+            </div>
+          </div>
+          <div style={s.card}>
+            <h3 style={s.cardTitle}>Suite</h3>
+            <div style={{marginBottom:14}}>
+              <label style={s.label}>Réunion publique ?</label>
+              <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+                {[{v:'oui',l:'🔥 Oui'},{v:'peut-etre',l:'🤔 Peut-être'},{v:'non',l:'❌ Non'}].map(r=>(
+                  <Check key={r.v} checked={data.reunionPublique===r.v} onClick={()=>updateField('reunionPublique',r.v)}>{r.l}</Check>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label style={s.label}>Second passage ?</label>
+              <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+                {[{v:'oui',l:'✓ Oui'},{v:'non',l:'✗ Non'}].map(r=>(
+                  <Check key={r.v} checked={data.secondPassage===r.v} onClick={()=>updateField('secondPassage',r.v)}>{r.l}</Check>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div style={s.card}>
+            <h3 style={s.cardTitle}>Notes</h3>
+            <textarea style={{...s.textarea,minHeight:100}} placeholder="Remarques libres..." value={data.notes||''} onChange={e=>updateField('notes',e.target.value)} />
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
